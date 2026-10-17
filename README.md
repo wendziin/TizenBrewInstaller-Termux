@@ -18,7 +18,7 @@ Este repositório é uma versão adaptada e otimizada do [TizenBrewInstaller](ht
 
 ## 📋 Pré-requisitos
 
-1. **Celular com Android** e o aplicativo [Termux](https://github.com/termux/termux-app/releases) instalado (preferencialmente a versão do F-Droid / GitHub).
+1. **Celular com Android** e o aplicativo [Termux](https://f-droid.org/pt_BR/packages/com.termux/) instalado (preferencialmente a versão do F-Droid / GitHub).
 2. **Smart TV Samsung** (com Tizen OS 3.0 ou superior, lançadas de 2017 em diante).
 3. **Mesma Rede:** O celular e a TV devem estar conectados na **mesma rede Wi-Fi**.
 
