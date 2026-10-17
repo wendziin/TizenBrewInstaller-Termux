@@ -1,0 +1,6 @@
+node_modules/
+*.wgt
+*.zip
+userwidget/
+.DS_Store
+*.log

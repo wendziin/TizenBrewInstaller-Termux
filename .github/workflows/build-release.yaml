@@ -1,0 +1,100 @@
+name: Build TizenBrew Installer and Release
+
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch full history for tags
+          fetch-tags: true
+      
+      - name: Fetch tags (safety)
+        run: |
+          git fetch --tags --force --prune
+      - name: Determine release tag
+        id: version
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -z "$TAG" ]; then
+            echo "No tags found; deriving from config.xml or fallback"
+            if [ -f client/config.xml ]; then
+              # Extract version from config.xml's version attribute
+              CFG_VER=$(sed -n 's/.*version="\([^"]*\)".*/\1/p' client/config.xml | head -n1)
+              if [ -n "$CFG_VER" ]; then
+                TAG=v$CFG_VER
+              else
+                TAG=v0.0.0-${GITHUB_SHA:0:7}
+              fi
+            else
+              TAG=v0.0.0-${GITHUB_SHA:0:7}
+            fi
+          fi
+          echo "RELEASE_VERSION=$TAG" >> $GITHUB_ENV
+      
+      - name: Install ldid (required system tool)
+        uses: MOZGIII/install-ldid-action@v1
+        with:
+          tag: v2.1.5-procursus7
+
+      - name: Install modules, transpile service and build service
+        working-directory: client/services/tizenbrew-installer-service
+        run: |
+          sudo apt update
+          sudo apt install -y expect zip coreutils
+          npm install
+          npm install -g @vercel/ncc wgt-to-usb https://github.com/reisxd/tizen.js/tarball/main @yao-pkg/pkg
+          npm run build
+          rm -rf node_modules
+          rm -rf transpiled
+
+      - name: Build UI
+        working-directory: client/ui
+        run: |
+          npm install --force
+          npm run build
+          rm -rf node_modules
+
+      - name: Prepare Tizen Certificate
+        run: |
+          echo "${{ secrets.TIZEN_AUTHOR_KEY }}" | base64 -d > "${GITHUB_WORKSPACE}/tizenbrew-author.p12"
+
+      - name: Build TizenBrew
+        working-directory: client
+        run: |
+          mkdir release
+          tizenjs build . -t wgt -o release/TizenBrewInstaller.wgt --author "${GITHUB_WORKSPACE}/tizenbrew-author.p12" --authorPwd '${{ secrets.TIZEN_AUTHOR_KEY_PW }}' -p public --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
+
+      - name: Upload TizenBrew package artifact for Old Tizen
+        uses: actions/upload-artifact@v4
+        with:
+            name: app-${{ github.sha }}-old.wgt
+            path: client/release/TizenBrewInstaller.wgt
+      
+      - name: Release TizenBrew Build Results
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            client/release/*
+
+      - name: Build Installer Desktop
+        working-directory: client
+        run: |
+          pkg -C GZip . --no-bytecode --public
+        
+      - name: Release Installer Desktop
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            client/dist/*
